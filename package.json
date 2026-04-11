@@ -37,11 +37,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/amadevstudio/sourcemap_decoder.git"
+    "url": "git+https://github.com/amadevstudio/sourcemap_decode.git"
   },
-  "homepage": "https://github.com/amadevstudio/sourcemap_decoder",
+  "homepage": "https://github.com/amadevstudio/sourcemap_decode",
   "bugs": {
-    "url": "https://github.com/amadevstudio/sourcemap_decoder/issues"
+    "url": "https://github.com/amadevstudio/sourcemap_decode/issues"
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "^0.3.31"
