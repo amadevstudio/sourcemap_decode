@@ -18,6 +18,7 @@
     "build": "tsc",
     "test": "vitest run",
     "test:e2e": "node e2e/dist/app.js 2>&1 | node dist/cli.js --assets ./e2e/dist",
+    "test:all": "npm test && npm run test:e2e",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
