@@ -1,0 +1,58 @@
+{
+  "name": "sourcemap-decoder",
+  "version": "0.1.0",
+  "description": "Decode production stack traces to original source locations using local sourcemaps",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run e2e/",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "sourcemap",
+    "stack-trace",
+    "decode",
+    "error-tracking",
+    "debugging",
+    "production",
+    "nodejs",
+    "webpack",
+    "vite",
+    "esbuild"
+  ],
+  "author": "Konstantin Smard",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amadevstudio/sourcemap_decoder.git"
+  },
+  "homepage": "https://github.com/amadevstudio/sourcemap_decoder",
+  "bugs": {
+    "url": "https://github.com/amadevstudio/sourcemap_decoder/issues"
+  },
+  "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
