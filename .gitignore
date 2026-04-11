@@ -2,6 +2,7 @@ node_modules/
 dist/
 e2e/dist/
 .claude/
+playground/
 
 # Environment
 .env

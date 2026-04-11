@@ -31,30 +31,35 @@ export interface DecodeResult {
 
 export interface DecodeOptions {
   /**
-   * Regex to match bundle references in stack traces.
+   * Path to the directory containing `.js` and `.js.map` files.
+   * The library will automatically find sourcemaps by matching basenames.
+   *
+   * This is the simplest way to use the library — just point it at your build output.
+   *
+   * @example
+   * { assetsPath: "./dist" }
+   * { assetsPath: ".next/static/chunks" }
+   */
+  assetsPath?: string;
+
+  /**
+   * Custom regex to match bundle references in stack traces.
    * Must capture 3 groups: (file):(line):(column).
    * Must have the `g` flag.
    *
-   * @example
-   * // Next.js
-   * /(\/_next\/static\/chunks\/[^:]+\.js):(\d+):(\d+)/g
-   *
-   * // Generic build output
-   * /(\/dist\/[^:]+\.js):(\d+):(\d+)/g
+   * Only needed for non-standard stack trace formats.
+   * When omitted, a generic pattern matching any `.js:line:col` is used.
    */
-  stackPattern: RegExp;
+  stackPattern?: RegExp;
 
   /**
-   * Resolve a file path from a stack trace to the corresponding `.map` file on disk.
+   * Custom function to resolve a file path from a stack trace
+   * to the corresponding `.map` file on disk.
    *
-   * @example
-   * // Next.js
-   * (file) => path.join('.next/static/chunks', file.replace(/^\/_next\/static\/chunks\//, '')) + '.map'
-   *
-   * // Webpack output in dist/
-   * (file) => path.join('dist', file.replace(/^\/dist\//, '')) + '.map'
+   * Only needed when your sourcemap file structure is non-standard.
+   * When omitted (and `assetsPath` is set), basename matching is used.
    */
-  resolveSourceMap: (file: string) => string;
+  resolveSourceMap?: (file: string) => string;
 
   /**
    * Clean sourcemap source paths (e.g. remove webpack:// prefixes).
@@ -69,8 +74,32 @@ export interface DecodeOptions {
   cleanPathPattern?: RegExp;
 }
 
+const DEFAULT_STACK_PATTERN = /([^\s()"']+\.js):(\d+):(\d+)/g;
 const DEFAULT_CLEAN_PATH_PATTERN = /^webpack:\/\/\w+\//;
 const FUNCTION_RE = /at\s+([^\s(]+)/;
+
+/**
+ * Recursively find a `.map` file by basename within a directory.
+ * Returns the first match, or a fallback path in the root dir.
+ */
+function findMapFile(dir: string, basename: string): string {
+  const rootCandidate = path.join(dir, basename);
+  if (fs.existsSync(rootCandidate)) return rootCandidate;
+
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const found = findMapFile(path.join(dir, entry.name), basename);
+        if (fs.existsSync(found)) return found;
+      }
+    }
+  } catch {
+    // Permission errors, etc. — fall through
+  }
+
+  return rootCandidate; // fallback: let decodeFrame report "not found"
+}
 
 export function parseStackTrace(stack: string, pattern: RegExp): StackFrame[] {
   const frames: StackFrame[] = [];
@@ -170,16 +199,15 @@ export function decodeFrame(
 /**
  * Decode a production stack trace to original source locations using sourcemaps.
  *
- * Reads `.map` files from disk using the provided `resolveSourceMap` function.
- * Must be called server-side (Node.js).
+ * Reads `.map` files from disk. Must be called server-side (Node.js).
  *
  * @example
  * ```ts
  * import { decodeStackTrace } from "sourcemap-decoder";
  *
+ * // Simple — just point at your build output folder:
  * const result = decodeStackTrace(error.stack ?? "", {
- *   stackPattern: /(\/dist\/[^:]+\.js):(\d+):(\d+)/g,
- *   resolveSourceMap: (file) => path.join("dist", file.replace(/^\/dist\//, "")) + ".map",
+ *   assetsPath: "./dist",
  * });
  *
  * console.error(result.stack);
@@ -187,16 +215,29 @@ export function decodeFrame(
  */
 export function decodeStackTrace(
   stack: string,
-  options: DecodeOptions
+  options: DecodeOptions = {}
 ): DecodeResult {
-  const cleanPaths = options.cleanPaths ?? true;
+  const { assetsPath, cleanPaths = true } = options;
   const cleanPathPattern = options.cleanPathPattern ?? DEFAULT_CLEAN_PATH_PATTERN;
 
-  const parsed = parseStackTrace(stack, options.stackPattern);
+  const stackPattern = options.stackPattern ?? DEFAULT_STACK_PATTERN;
+
+  let resolveSourceMap: (file: string) => string;
+  if (options.resolveSourceMap) {
+    resolveSourceMap = options.resolveSourceMap;
+  } else if (assetsPath) {
+    resolveSourceMap = (file) =>
+      findMapFile(assetsPath, path.basename(file) + ".map");
+  } else {
+    // No assetsPath and no resolveSourceMap — try .map next to the file itself
+    resolveSourceMap = (file) => file + ".map";
+  }
+
+  const parsed = parseStackTrace(stack, stackPattern);
   if (parsed.length === 0) return { decoded: false, stack };
 
   const frames = parsed.map((f) =>
-    decodeFrame(f, options.resolveSourceMap, cleanPaths, cleanPathPattern)
+    decodeFrame(f, resolveSourceMap, cleanPaths, cleanPathPattern)
   );
 
   const hasDecoded = frames.some((f) => f.file && !f.error);

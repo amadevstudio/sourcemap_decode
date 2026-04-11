@@ -6,27 +6,25 @@ No Sentry, no external services — sourcemaps stay on your server.
 
 ## Why this package?
 
-`@jridgewell/trace-mapping` is a low-level primitive: give it a parsed sourcemap and a `line:column` position, it returns the original position. That's it.
-
-To actually decode a production error, you still need to:
+`@jridgewell/trace-mapping` is a great low-level primitive: give it a parsed sourcemap and a `line:column`, it returns the original position. But to actually decode a production error, you still need to:
 
 1. **Parse `Error.stack`** — extract file paths, line numbers, column numbers from a raw string
-2. **Read `.map` files from disk** — resolve which sourcemap corresponds to which bundle
-3. **Handle single-line bundles** — Webpack/esbuild can produce bundles where the sourcemap maps everything to line 1, but the runtime wraps code into multiple lines. You need to recalculate the absolute column offset
+2. **Read `.map` files from disk** — figure out which sourcemap corresponds to which bundle
+3. **Handle single-line bundles** — Webpack/esbuild can produce single-line output, but the runtime wraps it into multiple lines. You need to recalculate the absolute column offset
 4. **Format the result** — turn decoded positions back into a readable stack trace
 
-That's ~100 lines of non-trivial boilerplate every time. `sourcemap-decoder` does all of it in a single call.
+That's ~100 lines of non-trivial boilerplate. `sourcemap-decoder` wraps all of it into one call.
 
 ### What about the alternatives?
 
 | Package | Downloads | Status | Limitation |
 |---------|----------|--------|------------|
-| `source-map-support` | ~100M/week | Unmaintained (4+ years) | Runtime hook only — must be installed before errors are thrown. Cannot decode an arbitrary stack string after the fact |
-| `--enable-source-maps` | Built-in | Experimental | Runtime only. Known performance issues with large bundles. Incompatible with custom `prepareStackTrace` |
+| `source-map-support` | ~100M/week | Unmaintained (4+ years) | Runtime hook only — must be installed before errors are thrown. Cannot decode a collected stack string |
+| `--enable-source-maps` | Built-in | Experimental | Runtime only. Performance issues with large bundles |
 | `stacktrace-js` | ~4.7M/week | Unmaintained (6+ years) | Browser-only — fetches sourcemaps via XHR |
 | `sourcemapped-stacktrace` | ~135K/week | Inactive | Browser-only — no Node.js disk-based resolution |
 
-**`sourcemap-decoder` fills the gap:** post-hoc decoding of collected stack traces on the server, using `.map` files from disk. Framework-agnostic, maintained, zero config beyond two required parameters.
+**`sourcemap-decoder` fills the gap:** post-hoc decoding of collected stack traces on the server, using `.map` files from disk. Framework-agnostic, maintained, works with any bundler.
 
 ## Install
 
@@ -36,17 +34,13 @@ npm install sourcemap-decoder
 
 ## Usage
 
+Point it at your build output folder — that's it:
+
 ```ts
-import path from "path";
 import { decodeStackTrace } from "sourcemap-decoder";
 
 const result = decodeStackTrace(error.stack ?? "", {
-  // Regex to match bundle paths in stack traces (must have `g` flag, 3 capture groups: file, line, column)
-  stackPattern: /(\/dist\/[^:]+\.js):(\d+):(\d+)/g,
-
-  // Resolve stack trace path to .map file on disk
-  resolveSourceMap: (file) =>
-    path.join("dist", file.replace(/^\/dist\//, "")) + ".map",
+  assetsPath: "./dist",
 });
 
 if (result.decoded) {
@@ -55,7 +49,29 @@ if (result.decoded) {
 }
 ```
 
+**Before:**
+```
+at o (app.js:1:126)
+at e (app.js:1:220)
+```
+
+**After:**
+```
+at validateEmail (src/utils.ts:10:10)
+at initApp (src/app.ts:8:2)
+```
+
 ### Next.js
+
+```ts
+const result = decodeStackTrace(error.stack ?? "", {
+  assetsPath: ".next/static/chunks",
+});
+```
+
+### Custom sourcemap resolution
+
+For non-standard setups (nested paths, custom naming), override the defaults:
 
 ```ts
 const result = decodeStackTrace(error.stack ?? "", {
@@ -65,61 +81,50 @@ const result = decodeStackTrace(error.stack ?? "", {
 });
 ```
 
-### Webpack
+### Clean path patterns
+
+By default, `webpack://` prefixes are stripped from source paths. Customize or disable:
 
 ```ts
-const result = decodeStackTrace(error.stack ?? "", {
-  stackPattern: /(\/dist\/[^:]+\.js):(\d+):(\d+)/g,
-  resolveSourceMap: (file) =>
-    path.join("dist", file.replace(/^\/dist\//, "")) + ".map",
-});
-```
-
-### Custom clean path pattern
-
-By default, `webpack://` prefixes are stripped from source paths. You can customize this:
-
-```ts
+// Custom prefix
 const result = decodeStackTrace(stack, {
-  stackPattern: /(\/build\/[^:]+\.js):(\d+):(\d+)/g,
-  resolveSourceMap: (file) => path.join("build", file.replace(/^\/build\//, "")) + ".map",
+  assetsPath: "./dist",
   cleanPathPattern: /^webpack:\/\/my-app\//,
 });
-```
 
-To disable path cleaning:
-
-```ts
+// Disable cleaning
 const result = decodeStackTrace(stack, {
-  stackPattern: /..../g,
-  resolveSourceMap: (file) => "...",
+  assetsPath: "./dist",
   cleanPaths: false,
 });
 ```
 
 ## How it works
 
-1. Parses bundle file references from the stack trace using your `stackPattern`
-2. Resolves each reference to a `.map` file on disk via `resolveSourceMap`
+1. Parses `.js:line:col` references from the stack trace
+2. Finds `.map` files in your `assetsPath` directory
 3. Maps minified positions to original source using `@jridgewell/trace-mapping`
 
 ### Single-line bundle handling
 
-Some bundlers produce output where the sourcemap has a single mapping line, but the runtime wraps the content into multiple lines. The runtime reports `line:3 col:42`, but the sourcemap only has mappings for `line:1`.
+Some bundlers produce output where the sourcemap maps everything to line 1, but the runtime wraps the content into multiple lines. The runtime reports `line:3 col:42`, but the sourcemap only has mappings for `line:1`.
 
 This library detects this case and recalculates the absolute column offset by summing line lengths, giving you the correct original position.
 
 ## API
 
-### `decodeStackTrace(stack, options)`
+### `decodeStackTrace(stack, options?)`
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `stack` | `string` | Yes | Raw stack trace from `Error.stack` |
-| `options.stackPattern` | `RegExp` | Yes | Regex with `g` flag matching `(file):(line):(column)` in stack traces |
-| `options.resolveSourceMap` | `(file: string) => string` | Yes | Maps stack trace file path to `.map` file path on disk |
+| `options.assetsPath` | `string` | No* | Path to directory with `.js` and `.js.map` files |
+| `options.stackPattern` | `RegExp` | No | Custom regex with `g` flag matching `(file):(line):(column)`. Default: any `.js:line:col` |
+| `options.resolveSourceMap` | `(file: string) => string` | No | Custom function to resolve `.map` file path |
 | `options.cleanPaths` | `boolean` | No | Strip prefixes from source paths. Default: `true` |
 | `options.cleanPathPattern` | `RegExp` | No | Regex for path cleaning. Default: `/^webpack:\/\/\w+\//` |
+
+\* At least `assetsPath` or `resolveSourceMap` should be provided.
 
 **Returns:** `DecodeResult`
 
@@ -161,7 +166,7 @@ interface StackFrame {
 
 ## Related
 
-- [sourcemap-decode-service](https://github.com/amadevstudio/source_dese) — standalone microservice with the same decoding logic and a REST API. Use it when you need an HTTP endpoint instead of a library import.
+- [sourcemap-decode-service](https://github.com/amadevstudio/source_dese) — standalone microservice with the same decoding logic and a REST API. Use when you need an HTTP endpoint instead of a library import.
 
 ## Requirements
 

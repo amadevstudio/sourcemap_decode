@@ -19,52 +19,57 @@ beforeAll(() => {
   );
 });
 
+function captureStackTrace(): string {
+  const output = execSync(`node e2e/dist/app.js 2>&1`, {
+    cwd: path.resolve("."),
+    encoding: "utf-8",
+  });
+  const stackMatch = output.match(/(TypeError:[\s\S]+)/);
+  expect(stackMatch).not.toBeNull();
+  return stackMatch![1]!;
+}
+
 describe("e2e: real bundled app", () => {
   it("bundle and sourcemap exist", () => {
     expect(fs.existsSync(bundlePath)).toBe(true);
     expect(fs.existsSync(bundlePath + ".map")).toBe(true);
   });
 
-  it("decodes a real minified stack trace from bundled code", () => {
-    // Run the bundled app — it catches the error internally and console.error's the stack
-    const output = execSync(`node e2e/dist/app.js 2>&1`, {
-      cwd: path.resolve("."),
-      encoding: "utf-8",
-    });
-
-    // Extract the stack trace
-    const stackMatch = output.match(/(TypeError:[\s\S]+)/);
-    expect(stackMatch).not.toBeNull();
-    const rawStack = stackMatch![1]!;
+  it("decodes with simple assetsPath", () => {
+    const rawStack = captureStackTrace();
 
     console.log("=== Raw stack trace ===");
     console.log(rawStack);
 
-    // The stack trace contains file:// URLs like:
-    //   at o (file:///abs/path/e2e/dist/app.js:1:126)
-    // We need to match the app.js part
     const result = decodeStackTrace(rawStack, {
-      stackPattern: /(app\.js):(\d+):(\d+)/g,
-      resolveSourceMap: () => bundlePath + ".map",
+      assetsPath: distDir,
     });
 
     console.log("\n=== Decoded stack trace ===");
     console.log(result.stack);
-    console.log("\n=== Frames ===");
-    console.log(JSON.stringify(result.frames, null, 2));
 
     expect(result.decoded).toBe(true);
     expect(result.frames).toBeDefined();
     expect(result.frames!.length).toBeGreaterThan(0);
 
-    // First frame should point to validateEmail in utils.ts (the throw)
     const firstFrame = result.frames![0]!;
     expect(firstFrame.file).toContain("utils.ts");
-    expect(firstFrame.line).toBe(10); // throw new TypeError line in original utils.ts
+    expect(firstFrame.line).toBe(10);
 
-    // Second frame should point to initApp in app.ts
     const appFrame = result.frames!.find((f) => f.file?.includes("app.ts"));
     expect(appFrame).toBeDefined();
-    expect(appFrame!.line).toBe(8); // validateEmail("not-an-email") call in original app.ts
+    expect(appFrame!.line).toBe(8);
+  });
+
+  it("decodes with custom stackPattern + resolveSourceMap", () => {
+    const rawStack = captureStackTrace();
+
+    const result = decodeStackTrace(rawStack, {
+      stackPattern: /(app\.js):(\d+):(\d+)/g,
+      resolveSourceMap: () => bundlePath + ".map",
+    });
+
+    expect(result.decoded).toBe(true);
+    expect(result.frames![0]!.file).toContain("utils.ts");
   });
 });
