@@ -1,6 +1,6 @@
 {
   "name": "sourcemap-decode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Decode production stack traces to original source locations using local sourcemaps",
   "type": "module",
   "main": "dist/index.js",
