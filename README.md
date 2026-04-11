@@ -1,4 +1,4 @@
-# sourcemap-decoder
+# sourcemap-decode
 
 Decode production stack traces to original source locations using local `.map` files. One function call: raw `Error.stack` in, readable stack trace out.
 
@@ -13,7 +13,7 @@ No Sentry, no external services — sourcemaps stay on your server.
 3. **Handle single-line bundles** — Webpack/esbuild can produce single-line output, but the runtime wraps it into multiple lines. You need to recalculate the absolute column offset
 4. **Format the result** — turn decoded positions back into a readable stack trace
 
-That's ~100 lines of non-trivial boilerplate. `sourcemap-decoder` wraps all of it into one call.
+That's ~100 lines of non-trivial boilerplate. `sourcemap-decode` wraps all of it into one call.
 
 ### What about the alternatives?
 
@@ -24,12 +24,12 @@ That's ~100 lines of non-trivial boilerplate. `sourcemap-decoder` wraps all of i
 | `stacktrace-js` | ~4.7M/week | Unmaintained (6+ years) | Browser-only — fetches sourcemaps via XHR |
 | `sourcemapped-stacktrace` | ~135K/week | Inactive | Browser-only — no Node.js disk-based resolution |
 
-**`sourcemap-decoder` fills the gap:** post-hoc decoding of collected stack traces on the server, using `.map` files from disk. Framework-agnostic, maintained, works with any bundler.
+**`sourcemap-decode` fills the gap:** post-hoc decoding of collected stack traces on the server, using `.map` files from disk. Framework-agnostic, maintained, works with any bundler.
 
 ## Install
 
 ```bash
-npm install sourcemap-decoder
+npm install sourcemap-decode
 ```
 
 ## Usage
@@ -37,7 +37,7 @@ npm install sourcemap-decoder
 Point it at your build output folder — that's it:
 
 ```ts
-import { decodeStackTrace } from "sourcemap-decoder";
+import { decodeStackTrace } from "sourcemap-decode";
 
 const result = decodeStackTrace(error.stack ?? "", {
   assetsPath: "./dist",

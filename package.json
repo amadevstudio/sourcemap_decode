@@ -1,5 +1,5 @@
 {
-  "name": "sourcemap-decoder",
+  "name": "sourcemap-decode",
   "version": "0.1.0",
   "description": "Decode production stack traces to original source locations using local sourcemaps",
   "type": "module",

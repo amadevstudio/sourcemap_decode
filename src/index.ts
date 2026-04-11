@@ -203,7 +203,7 @@ export function decodeFrame(
  *
  * @example
  * ```ts
- * import { decodeStackTrace } from "sourcemap-decoder";
+ * import { decodeStackTrace } from "sourcemap-decode";
  *
  * // Simple — just point at your build output folder:
  * const result = decodeStackTrace(error.stack ?? "", {
