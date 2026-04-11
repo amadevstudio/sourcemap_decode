@@ -43,6 +43,14 @@ at validateEmail (src/utils.ts:10:10)
 at initApp (src/app.ts:8:2)
 ```
 
+### CLI (pipe mode)
+
+Pipe any command's output through the CLI to decode stack traces on the fly:
+
+```bash
+node app.js 2>&1 | npx sourcemap-decode --assets ./dist
+```
+
 ### Next.js
 
 ```ts
